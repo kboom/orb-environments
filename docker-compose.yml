@@ -1,0 +1,99 @@
+version: '2'
+services:
+
+  orb-static:
+    container_name: orb-static
+    env_file: ./docker-env.properties
+    image: nginx
+    volumes:
+      - ./static:/usr/share/nginx/html
+    ports:
+        - "5001:80"
+
+  orb-config:
+    container_name: orb-config
+    env_file: ./docker-env.properties
+    ports:
+        - "8888:8888"
+    build:
+      context: ./server/config
+
+  orb-service-locator:
+    container_name: orb-service-locator
+    env_file: ./docker-env.properties
+    build:
+        context: ./server/service-locator
+    ports:
+        - "8761:8761"
+    links:
+        - orb-config
+    depends_on:
+        - orb-config
+        
+  orb-storage-db:
+    container_name: orb-storage-db
+    env_file: ./docker-env.properties
+    image: wnameless/oracle-xe-11g
+    ports:
+        - "6001:1521"
+
+  orb-storage:
+    container_name: orb-storage
+    env_file: ./docker-env.properties
+    build:
+        context: ./server/storage
+    ports:
+        - "10001:8080"
+    stdin_open: true
+    links:
+      - orb-config
+      - orb-static:static-content
+      - orb-storage-db
+      - orb-service-locator
+    depends_on:
+      - orb-config
+      - orb-storage-db
+      - orb-service-locator
+      - orb-static
+      
+  orb-trading:
+    container_name: orb-trading
+    env_file: ./docker-env.properties
+    build:
+        context: ./server/trading
+    stdin_open: true
+    ports:
+        - "10002:8080"
+    links:
+      - orb-config
+      - orb-static:static-content
+      - orb-service-locator
+    depends_on:
+      - orb-config
+      - orb-service-locator
+      - orb-static
+
+  orb-api-gateway:
+    container_name: orb-api-gateway
+    env_file: ./docker-env.properties
+    build:
+      context: ./server/api-gateway
+    ports:
+      - "9001:8080"
+    links:
+      - orb-config
+      - orb-service-locator
+    depends_on:
+      - orb-config
+      - orb-service-locator
+      - orb-storage
+      - orb-trading
+
+  orb-client:
+    container_name: orb-client
+    env_file: ./docker-env.properties
+    build: ./client
+    ports:
+      - "9000:9000"
+    depends_on:
+      - orb-api-gateway
